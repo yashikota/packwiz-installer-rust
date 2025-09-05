@@ -107,17 +107,22 @@ jobs:
           merge-multiple: true
 
       - name: Create draft release and upload assets
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euxo pipefail
-          TAG="${GITHUB_REF_NAME}"
-          gh release create "$TAG" --draft --generate-notes dist/*
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: true
+          generateReleaseNotes: true
+          artifacts: dist/*
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish release (make immutable)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euxo pipefail
-          TAG="${GITHUB_REF_NAME}"
-          gh release edit "$TAG" --draft=false --latest
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          allowUpdates: true
+          draft: false
+          makeLatest: true
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          token: ${{ secrets.GITHUB_TOKEN }}
