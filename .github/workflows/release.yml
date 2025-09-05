@@ -53,20 +53,18 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install cross
-        if: matrix.use_cross == 'true'
+        if: ${{ matrix.use_cross }}
         uses: taiki-e/install-action@v2
         with:
           tool: cross
 
-      - name: Build (release)
-        shell: bash
-        run: |
-          set -euxo pipefail
-          if [ "${{ matrix.use_cross }}" = "true" ]; then
-            cross build --release --locked --target ${{ matrix.target }}
-          else
-            cargo build --release --locked --target ${{ matrix.target }}
-          fi
+      - name: Build (release) with cross
+        if: ${{ matrix.use_cross }}
+        run: cross build --release --locked --target ${{ matrix.target }}
+
+      - name: Build (release) with cargo
+        if: ${{ !matrix.use_cross }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Package (Unix)
         if: runner.os != 'Windows'
