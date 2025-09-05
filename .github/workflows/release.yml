@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  BINARY_NAME: packwiz-installer
+
+jobs:
+  build:
+    name: ${{ matrix.asset_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset_name: linux-x86_64
+            archive_name: packwiz-installer-x86_64-unknown-linux-gnu.tar.gz
+          - os: macos-latest
+            asset_name: macos-x86_64
+            archive_name: packwiz-installer-x86_64-apple-darwin.tar.gz
+          - os: windows-latest
+            asset_name: windows-x86_64
+            archive_name: packwiz-installer-x86_64-pc-windows-msvc.zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (release)
+        run: cargo build --release --locked
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          cp target/release/${BINARY_NAME} dist/
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            tar -C dist -czf dist/packwiz-installer-x86_64-unknown-linux-gnu.tar.gz ${BINARY_NAME}
+            shasum -a 256 dist/packwiz-installer-x86_64-unknown-linux-gnu.tar.gz | awk '{print $1}' > dist/packwiz-installer-x86_64-unknown-linux-gnu.tar.gz.sha256
+          else
+            tar -C dist -czf dist/packwiz-installer-x86_64-apple-darwin.tar.gz ${BINARY_NAME}
+            shasum -a 256 dist/packwiz-installer-x86_64-apple-darwin.tar.gz | awk '{print $1}' > dist/packwiz-installer-x86_64-apple-darwin.tar.gz.sha256
+          fi
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target\release\${env:BINARY_NAME}.exe dist\${env:BINARY_NAME}.exe
+          Compress-Archive -Path dist\${env:BINARY_NAME}.exe -DestinationPath dist\packwiz-installer-x86_64-pc-windows-msvc.zip
+          (Get-FileHash -Algorithm SHA256 dist\packwiz-installer-x86_64-pc-windows-msvc.zip).Hash | Out-File -NoNewline dist\packwiz-installer-x86_64-pc-windows-msvc.zip.sha256
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
