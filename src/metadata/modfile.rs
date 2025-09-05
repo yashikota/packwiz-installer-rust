@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde::de::{self, Deserializer, Unexpected, Visitor};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ModToml {
@@ -33,13 +34,31 @@ pub struct ModDownload {
     pub mode: DownloadMode,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum DownloadMode {
-    Url,
-    Curseforge,
-}
+#[derive(Debug, Clone, Copy, Serialize)]
+pub enum DownloadMode { Url, Curseforge }
 impl Default for DownloadMode { fn default() -> Self { DownloadMode::Url } }
+
+impl<'de> Deserialize<'de> for DownloadMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        struct ModeVisitor;
+        impl<'de> Visitor<'de> for ModeVisitor {
+            type Value = DownloadMode;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a download mode string: \"\", \"url\" or \"metadata:curseforge\"")
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where E: de::Error {
+                match v {
+                    "" | "url" => Ok(DownloadMode::Url),
+                    "metadata:curseforge" => Ok(DownloadMode::Curseforge),
+                    other => Err(E::invalid_value(Unexpected::Str(other), &self)),
+                }
+            }
+        }
+        deserializer.deserialize_any(ModeVisitor)
+    }
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ModUpdate { #[serde(default)] pub curseforge: Option<CfUpdate> }

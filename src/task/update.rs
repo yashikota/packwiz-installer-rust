@@ -62,24 +62,33 @@ pub async fn run_update(opts: Options) -> Result<()> {
     };
     let futs = index_toml.files.clone().into_iter().map(|e| process_entry(e, &ctx));
     let results: Vec<_> = stream::iter(futs).buffer_unordered(8).collect().await;
-    let mut cached_files = serde_json::Map::new();
+    // Collect results into a lookup to allow insertion in index order
+    let mut by_path: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
     let mut new_paths: BTreeSet<String> = BTreeSet::new();
     for r in results {
-        if let Some(er) = r? { new_paths.insert(er.path.clone()); cached_files.insert(er.path, er.value); }
+        if let Some(er) = r? { new_paths.insert(er.path.clone()); by_path.insert(er.path, er.value); }
     }
+    // Build cached_files sorted by key in descending order to match original
+    let mut cached_files = serde_json::Map::new();
+    let mut keys: Vec<String> = by_path.keys().cloned().collect();
+    keys.sort_by(|a, b| b.cmp(a));
+    for k in keys { if let Some(v) = by_path.remove(&k) { cached_files.insert(k, v); } }
 
     // Cleanup unreferenced
     remove_unreferenced(&prev, &new_paths, &opts.pack_folder);
 
     // Write manifest
     let manifest = crate::metadata::manifest::ManifestFile {
-        packFileHash: Some(pack_hash_sha256),
-        indexFileHash: index_hash_expected,
+        packFileHash: Some(crate::metadata::manifest::HashKV { type_: "sha256".into(), value: pack_hash_sha256 }),
+        indexFileHash: index_hash_expected.map(|v| crate::metadata::manifest::HashKV { type_: index_hash_format.clone(), value: v }),
         cachedFiles: cached_files,
         cachedSide: opts.side,
     };
-    let json = serde_json::to_vec_pretty(&manifest)?;
-    std::fs::write(&manifest_path, json)?;
+    // Write compact JSON with a trailing newline
+    let mut f = std::fs::File::create(&manifest_path)?;
+    serde_json::to_writer(&mut f, &manifest)?;
+    use std::io::Write as _;
+    writeln!(&mut f)?;
 
     Ok(())
 }

@@ -41,7 +41,8 @@ pub async fn process_entry(entry: IndexEntry, ctx: &EntryContext) -> Result<Opti
             let _ = std::fs::remove_file(ctx.pack_folder.join(&temp));
             return Ok(None);
         }
-        let dest_rel_val = entry.alias.clone().unwrap_or_else(|| mod_toml.filename.clone());
+        let mut dest_rel_val = entry.alias.clone().unwrap_or_else(|| mod_toml.filename.clone());
+        if !dest_rel_val.contains('/') { dest_rel_val = format!("mods/{}", dest_rel_val); }
         let dest_abs = ctx.pack_folder.join(&dest_rel_val);
         match mod_toml.download.mode {
             DownloadMode::Url => {
@@ -60,20 +61,23 @@ pub async fn process_entry(entry: IndexEntry, ctx: &EntryContext) -> Result<Opti
                     got = Some(h);
                 }
                 let mut file_obj = serde_json::Map::new();
-                let mut hash_obj = serde_json::Map::new();
-                hash_obj.insert("type".into(), serde_json::Value::String(mod_toml.download.hash_format.clone()));
-                hash_obj.insert("value".into(), serde_json::Value::String(got.unwrap()));
-                file_obj.insert("hash".into(), serde_json::Value::Object(hash_obj));
-                file_obj.insert("isOptional".into(), serde_json::Value::Bool(mod_toml.option.optional));
-                file_obj.insert("optionValue".into(), serde_json::Value::Bool(mod_toml.option.default_value));
-                let linked_hash_fmt = entry.hash_format.as_ref().unwrap_or(&file_hash_fmt_owned);
-                let linked_val = entry.hash.clone();
-                let mut linked_obj = serde_json::Map::new();
-                linked_obj.insert("type".into(), serde_json::Value::String(linked_hash_fmt.clone()));
-                linked_obj.insert("value".into(), serde_json::Value::String(linked_val));
-                file_obj.insert("linkedFileHash".into(), serde_json::Value::Object(linked_obj));
+                // metafile hash from index
+                let mut meta_hash = serde_json::Map::new();
+                let meta_fmt = entry.hash_format.as_ref().unwrap_or(&file_hash_fmt_owned).clone();
+                meta_hash.insert("type".into(), serde_json::Value::String(meta_fmt));
+                meta_hash.insert("value".into(), serde_json::Value::String(entry.hash.clone()));
+                file_obj.insert("hash".into(), serde_json::Value::Object(meta_hash));
+                // linked content hash (downloaded file)
+                let mut content_hash = serde_json::Map::new();
+                content_hash.insert("type".into(), serde_json::Value::String(mod_toml.download.hash_format.clone()));
+                content_hash.insert("value".into(), serde_json::Value::String(got.unwrap()));
+                file_obj.insert("linkedFileHash".into(), serde_json::Value::Object(content_hash));
+                if mod_toml.option.optional { file_obj.insert("isOptional".into(), serde_json::Value::Bool(true)); }
+                // Preserve field order to match original: hash, linkedFileHash, cachedLocation, optionValue
                 file_obj.insert("cachedLocation".into(), serde_json::Value::String(dest_rel_val.clone()));
-                Ok(Some(EntryResult { path: dest_rel_val, value: serde_json::Value::Object(file_obj) }))
+                file_obj.insert("optionValue".into(), serde_json::Value::Bool(true));
+                // key should be metafile path
+                Ok(Some(EntryResult { path: entry.file.clone(), value: serde_json::Value::Object(file_obj) }))
             }
             DownloadMode::Curseforge => {
                 let cf = mod_toml.update.curseforge.ok_or_else(|| anyhow::anyhow!("curseforge update section missing"))?;
@@ -92,34 +96,32 @@ pub async fn process_entry(entry: IndexEntry, ctx: &EntryContext) -> Result<Opti
                             got = Some(h);
                         }
                         let mut file_obj = serde_json::Map::new();
-                        let mut hash_obj = serde_json::Map::new();
-                        hash_obj.insert("type".into(), serde_json::Value::String(mod_toml.download.hash_format.clone()));
-                        hash_obj.insert("value".into(), serde_json::Value::String(got.unwrap()));
-                        file_obj.insert("hash".into(), serde_json::Value::Object(hash_obj));
-                        file_obj.insert("isOptional".into(), serde_json::Value::Bool(mod_toml.option.optional));
-                        file_obj.insert("optionValue".into(), serde_json::Value::Bool(mod_toml.option.default_value));
-                        let linked_hash_fmt = entry.hash_format.as_ref().unwrap_or(&file_hash_fmt_owned);
-                        let linked_val = entry.hash.clone();
-                        let mut linked_obj = serde_json::Map::new();
-                        linked_obj.insert("type".into(), serde_json::Value::String(linked_hash_fmt.clone()));
-                        linked_obj.insert("value".into(), serde_json::Value::String(linked_val));
-                        file_obj.insert("linkedFileHash".into(), serde_json::Value::Object(linked_obj));
+                        let mut meta_hash = serde_json::Map::new();
+                        let meta_fmt = entry.hash_format.as_ref().unwrap_or(&file_hash_fmt_owned).clone();
+                        meta_hash.insert("type".into(), serde_json::Value::String(meta_fmt));
+                        meta_hash.insert("value".into(), serde_json::Value::String(entry.hash.clone()));
+                        file_obj.insert("hash".into(), serde_json::Value::Object(meta_hash));
+                        let mut content_hash = serde_json::Map::new();
+                        content_hash.insert("type".into(), serde_json::Value::String(mod_toml.download.hash_format.clone()));
+                        content_hash.insert("value".into(), serde_json::Value::String(got.unwrap()));
+                        file_obj.insert("linkedFileHash".into(), serde_json::Value::Object(content_hash));
+                        if mod_toml.option.optional { file_obj.insert("isOptional".into(), serde_json::Value::Bool(true)); }
                         file_obj.insert("cachedLocation".into(), serde_json::Value::String(dest_rel_val.clone()));
-                        Ok(Some(EntryResult { path: dest_rel_val, value: serde_json::Value::Object(file_obj) }))
+                        file_obj.insert("optionValue".into(), serde_json::Value::Bool(true));
+                        Ok(Some(EntryResult { path: entry.file.clone(), value: serde_json::Value::Object(file_obj) }))
                     }
                     Err(manual_url) => {
                         tracing::warn!("CurseForge API excluded file; manual download needed: {}", manual_url);
                         let mut file_obj = serde_json::Map::new();
-                        let linked_hash_fmt = entry.hash_format.as_ref().unwrap_or(&file_hash_fmt_owned);
-                        let linked_val = entry.hash.clone();
-                        let mut linked_obj = serde_json::Map::new();
-                        linked_obj.insert("type".into(), serde_json::Value::String(linked_hash_fmt.clone()));
-                        linked_obj.insert("value".into(), serde_json::Value::String(linked_val));
-                        file_obj.insert("linkedFileHash".into(), serde_json::Value::Object(linked_obj));
-                        file_obj.insert("isOptional".into(), serde_json::Value::Bool(mod_toml.option.optional));
-                        file_obj.insert("optionValue".into(), serde_json::Value::Bool(mod_toml.option.default_value));
+                        let mut meta_hash = serde_json::Map::new();
+                        let meta_fmt = entry.hash_format.as_ref().unwrap_or(&file_hash_fmt_owned).clone();
+                        meta_hash.insert("type".into(), serde_json::Value::String(meta_fmt));
+                        meta_hash.insert("value".into(), serde_json::Value::String(entry.hash.clone()));
+                        file_obj.insert("hash".into(), serde_json::Value::Object(meta_hash));
+                        if mod_toml.option.optional { file_obj.insert("isOptional".into(), serde_json::Value::Bool(true)); }
                         file_obj.insert("cachedLocation".into(), serde_json::Value::String(dest_rel_val.clone()));
-                        Ok(Some(EntryResult { path: dest_rel_val, value: serde_json::Value::Object(file_obj) }))
+                        file_obj.insert("optionValue".into(), serde_json::Value::Bool(true));
+                        Ok(Some(EntryResult { path: entry.file.clone(), value: serde_json::Value::Object(file_obj) }))
                     }
                 }
             }
@@ -151,4 +153,3 @@ pub async fn process_entry(entry: IndexEntry, ctx: &EntryContext) -> Result<Opti
         Ok(Some(EntryResult { path: dest_rel_val, value: serde_json::Value::Object(file_obj) }))
     }
 }
-
