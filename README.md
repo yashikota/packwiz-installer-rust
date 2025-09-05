@@ -1,6 +1,6 @@
 # packwiz-installer-rust
 
-Experimental Rust CLI port of packwiz-installer. It fetches `pack.toml`, verifies and fetches `index.toml`, downloads files, validates hashes, cleans up removed files, and writes a deterministic `packwiz.json` compatible with the original installer.
+Experimental Rust CLI port of [packwiz-installer](https://github.com/packwiz/packwiz-installer). It fetches `pack.toml`, verifies and fetches `index.toml`, downloads files, validates hashes, cleans up removed files, and writes a deterministic `packwiz.json` compatible with the original installer.
 
 ## Build
 - Debug: `cargo build`
