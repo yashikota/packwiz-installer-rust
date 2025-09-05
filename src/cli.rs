@@ -1,6 +1,6 @@
+use crate::destination::side::Side;
 use clap::{ArgAction, Parser, ValueEnum};
 use std::path::PathBuf;
-use crate::target::side::Side;
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum OptionalMode {
@@ -10,7 +10,11 @@ pub enum OptionalMode {
 }
 
 #[derive(Parser, Debug, Clone)]
-#[command(name = "packwiz-installer", version, about = "Rust port of packwiz-installer (CLI only)")]
+#[command(
+    name = "packwiz-installer",
+    version,
+    about = "Rust port of packwiz-installer (CLI only)"
+)]
 pub struct Cli {
     /// Side to install mods from (client/server/both)
     #[arg(short = 's', long = "side", value_enum, default_value_t = Side::Client)]

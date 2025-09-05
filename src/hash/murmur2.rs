@@ -4,7 +4,7 @@ pub fn murmur2_hash(data: &[u8]) -> u32 {
     const R_32: u32 = 24;
 
     let len = data.len() as u32;
-    let mut h: u32 = 0 ^ len;
+    let mut h: u32 = len;
 
     let mut i = 0usize;
     while i + 4 <= data.len() {
@@ -39,4 +39,3 @@ pub fn murmur2_hash(data: &[u8]) -> u32 {
     h ^= h >> 15;
     h
 }
-

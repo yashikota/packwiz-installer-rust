@@ -13,4 +13,3 @@ pub fn build_http_client() -> Result<Client> {
         .build()?;
     Ok(client)
 }
-

@@ -1,17 +1,17 @@
 use anyhow::{Context, Result};
+use futures::{StreamExt, stream};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use futures::{stream, StreamExt};
 
-use crate::metadata::pack::PackFile as PackFileToml;
 use crate::metadata::index::IndexToml;
+use crate::metadata::pack::PackFile as PackFileToml;
 use crate::task::cache::{load_previous, remove_unreferenced};
-use crate::task::download::{process_entry, EntryContext};
+use crate::task::download::{EntryContext, process_entry};
 
 #[derive(Debug, Clone)]
 pub struct Options {
     pub pack_uri: String,
-    pub side: crate::target::side::Side,
+    pub side: crate::destination::side::Side,
     pub optional_mode: crate::cli::OptionalMode,
     pub pack_folder: PathBuf,
     pub meta_file: String,
@@ -27,25 +27,37 @@ pub async fn run_update(opts: Options) -> Result<()> {
         .with_context(|| "failed to parse pack.toml")?;
 
     // Prepare paths
-    if !opts.pack_folder.exists() { std::fs::create_dir_all(&opts.pack_folder)?; }
+    if !opts.pack_folder.exists() {
+        std::fs::create_dir_all(&opts.pack_folder)?;
+    }
     let manifest_path = opts.pack_folder.join(&opts.meta_file);
 
     // Load previous manifest for cleanup
     let prev = load_previous(&manifest_path);
 
     // Load index
-    let (index_uri, index_hash_format, index_hash_expected) = if let Some(idx) = pack_toml.index.clone() {
-        let file_uri = crate::join_uri(&opts.pack_uri, &idx.file)?;
-        let fmt = idx.hash_format.unwrap_or_else(|| "sha256".into());
-        let h = idx.hash;
-        (file_uri, fmt, h)
-    } else {
-        anyhow::bail!("pack.toml is missing [index]")
-    };
-    let index_bytes = crate::fetch_bytes(&index_uri).await.with_context(|| "failed to fetch index file")?;
+    let (index_uri, index_hash_format, index_hash_expected) =
+        if let Some(idx) = pack_toml.index.clone() {
+            let file_uri = crate::join_uri(&opts.pack_uri, &idx.file)?;
+            let fmt = idx.hash_format.unwrap_or_else(|| "sha256".into());
+            let h = idx.hash;
+            (file_uri, fmt, h)
+        } else {
+            anyhow::bail!("pack.toml is missing [index]")
+        };
+    let index_bytes = crate::fetch_bytes(&index_uri)
+        .await
+        .with_context(|| "failed to fetch index file")?;
     if let Some(exp) = index_hash_expected.as_ref() {
         let got = crate::hash_hex(&index_hash_format, &index_bytes)?;
-        if &got != exp { anyhow::bail!("index hash mismatch: got {}, expected {} (format {})", got, exp, index_hash_format); }
+        if &got != exp {
+            anyhow::bail!(
+                "index hash mismatch: got {}, expected {} (format {})",
+                got,
+                exp,
+                index_hash_format
+            );
+        }
     }
     let index_toml: IndexToml = toml::from_str(std::str::from_utf8(&index_bytes)?)
         .with_context(|| "failed to parse index.toml")?;
@@ -60,27 +72,45 @@ pub async fn run_update(opts: Options) -> Result<()> {
         optional_mode: opts.optional_mode,
         http,
     };
-    let futs = index_toml.files.clone().into_iter().map(|e| process_entry(e, &ctx));
+    let futs = index_toml
+        .files
+        .clone()
+        .into_iter()
+        .map(|e| process_entry(e, &ctx));
     let results: Vec<_> = stream::iter(futs).buffer_unordered(8).collect().await;
     // Collect results into a lookup to allow insertion in index order
-    let mut by_path: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
+    let mut by_path: std::collections::HashMap<String, serde_json::Value> =
+        std::collections::HashMap::new();
     let mut new_paths: BTreeSet<String> = BTreeSet::new();
     for r in results {
-        if let Some(er) = r? { new_paths.insert(er.path.clone()); by_path.insert(er.path, er.value); }
+        if let Some(er) = r? {
+            new_paths.insert(er.path.clone());
+            by_path.insert(er.path, er.value);
+        }
     }
     // Build cached_files sorted by key in descending order to match original
     let mut cached_files = serde_json::Map::new();
     let mut keys: Vec<String> = by_path.keys().cloned().collect();
     keys.sort_by(|a, b| b.cmp(a));
-    for k in keys { if let Some(v) = by_path.remove(&k) { cached_files.insert(k, v); } }
+    for k in keys {
+        if let Some(v) = by_path.remove(&k) {
+            cached_files.insert(k, v);
+        }
+    }
 
     // Cleanup unreferenced
     remove_unreferenced(&prev, &new_paths, &opts.pack_folder);
 
     // Write manifest
     let manifest = crate::metadata::manifest::ManifestFile {
-        packFileHash: Some(crate::metadata::manifest::HashKV { type_: "sha256".into(), value: pack_hash_sha256 }),
-        indexFileHash: index_hash_expected.map(|v| crate::metadata::manifest::HashKV { type_: index_hash_format.clone(), value: v }),
+        packFileHash: Some(crate::metadata::manifest::HashKV {
+            type_: "sha256".into(),
+            value: pack_hash_sha256,
+        }),
+        indexFileHash: index_hash_expected.map(|v| crate::metadata::manifest::HashKV {
+            type_: index_hash_format.clone(),
+            value: v,
+        }),
         cachedFiles: cached_files,
         cachedSide: opts.side,
     };
@@ -93,4 +123,6 @@ pub async fn run_update(opts: Options) -> Result<()> {
     Ok(())
 }
 
-fn super_hash_sha256(data: &[u8]) -> String { crate::sha256_hex(data) }
+fn super_hash_sha256(data: &[u8]) -> String {
+    crate::sha256_hex(data)
+}

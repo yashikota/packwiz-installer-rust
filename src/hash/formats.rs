@@ -3,4 +3,3 @@ pub enum HashFormat {
     Sha1,
     Murmur2,
 }
-

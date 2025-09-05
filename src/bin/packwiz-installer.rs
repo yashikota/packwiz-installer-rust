@@ -1,5 +1,5 @@
 use clap::Parser;
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

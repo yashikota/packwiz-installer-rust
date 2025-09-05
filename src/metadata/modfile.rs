@@ -1,12 +1,12 @@
-use serde::{Deserialize, Serialize};
 use serde::de::{self, Deserializer, Unexpected, Visitor};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ModToml {
     pub name: String,
     pub filename: String,
     #[serde(default)]
-    pub side: crate::target::side::Side,
+    pub side: crate::destination::side::Side,
     pub download: ModDownload,
     #[serde(default)]
     pub option: ModOption,
@@ -34,21 +34,29 @@ pub struct ModDownload {
     pub mode: DownloadMode,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
-pub enum DownloadMode { Url, Curseforge }
-impl Default for DownloadMode { fn default() -> Self { DownloadMode::Url } }
+#[derive(Debug, Clone, Copy, Serialize, Default)]
+pub enum DownloadMode {
+    #[default]
+    Url,
+    Curseforge,
+}
 
 impl<'de> Deserialize<'de> for DownloadMode {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         struct ModeVisitor;
         impl<'de> Visitor<'de> for ModeVisitor {
             type Value = DownloadMode;
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a download mode string: \"\", \"url\" or \"metadata:curseforge\"")
+                formatter
+                    .write_str("a download mode string: \"\", \"url\" or \"metadata:curseforge\"")
             }
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where E: de::Error {
+            where
+                E: de::Error,
+            {
                 match v {
                     "" | "url" => Ok(DownloadMode::Url),
                     "metadata:curseforge" => Ok(DownloadMode::Curseforge),
@@ -61,7 +69,15 @@ impl<'de> Deserialize<'de> for DownloadMode {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
-pub struct ModUpdate { #[serde(default)] pub curseforge: Option<CfUpdate> }
+pub struct ModUpdate {
+    #[serde(default)]
+    pub curseforge: Option<CfUpdate>,
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
-pub struct CfUpdate { #[serde(rename = "project-id")] pub project_id: i64, #[serde(rename = "file-id")] pub file_id: i64 }
+pub struct CfUpdate {
+    #[serde(rename = "project-id")]
+    pub project_id: i64,
+    #[serde(rename = "file-id")]
+    pub file_id: i64,
+}

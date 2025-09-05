@@ -1,3 +1,2 @@
-pub mod murmur2;
 pub mod formats;
-
+pub mod murmur2;

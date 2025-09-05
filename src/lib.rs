@@ -1,9 +1,9 @@
 pub mod cli;
+pub mod destination;
+pub mod hash;
 pub mod metadata;
 pub mod request;
 pub mod task;
-pub mod target;
-pub mod hash;
 
 use anyhow::{Context, Result};
 use bytes::Bytes;
@@ -12,8 +12,8 @@ use serde::Deserialize;
 use sha1::{Digest as Sha1DigestTrait, Sha1};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
+use tokio::time::{Duration, sleep};
 use tracing::info;
-use tokio::time::{sleep, Duration};
 
 fn sha256_hex(data: &[u8]) -> String {
     use sha2::{Digest, Sha256};
@@ -82,7 +82,7 @@ pub(crate) fn join_uri(base: &str, rel: &str) -> Result<String> {
             "http" | "https" => {
                 let joined = url
                     .join(rel)
-                    .with_context(|| format!("failed to join url {} + {}", url, rel))?;
+                    .with_context(|| format!("failed to join url {url} + {rel}"))?;
                 return Ok(joined.to_string());
             }
             "file" => {
@@ -97,12 +97,18 @@ pub(crate) fn join_uri(base: &str, rel: &str) -> Result<String> {
     }
     // local path base
     let p = Path::new(base);
-    let dir = if p.is_file() { p.parent().unwrap_or_else(|| Path::new(".")) } else { p };
+    let dir = if p.is_file() {
+        p.parent().unwrap_or_else(|| Path::new("."))
+    } else {
+        p
+    };
     Ok(dir.join(rel).to_string_lossy().to_string())
 }
 
 #[allow(dead_code)]
-fn hex_lower(bytes: &[u8]) -> String { bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>() }
+fn hex_lower(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()
+}
 
 pub(crate) fn hash_hex(format: &str, data: &[u8]) -> Result<String> {
     match format.to_ascii_lowercase().as_str() {
@@ -117,7 +123,7 @@ pub(crate) fn hash_hex(format: &str, data: &[u8]) -> Result<String> {
         }
         "md5" => {
             let digest = md5::compute(data);
-            Ok(format!("{:x}", digest))
+            Ok(format!("{digest:x}"))
         }
         "murmur2" => {
             let h = crate::hash::murmur2::murmur2_hash(data);
@@ -135,31 +141,58 @@ pub(crate) fn hash_file_hex(format: &str, path: &Path) -> Result<String> {
 // -------- CurseForge resolution (module scope) --------
 #[derive(Debug, Clone, Deserialize)]
 #[allow(non_snake_case, dead_code)]
-struct CfFile { id: i64, #[serde(rename = "modId")] mod_id: i64, #[serde(default)] downloadUrl: Option<String> }
+struct CfFile {
+    id: i64,
+    #[serde(rename = "modId")]
+    mod_id: i64,
+    #[serde(default)]
+    downloadUrl: Option<String>,
+}
 
 #[derive(Debug, Clone, Deserialize)]
-struct CfFilesResp { data: Vec<CfFile> }
+struct CfFilesResp {
+    data: Vec<CfFile>,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[allow(non_snake_case, dead_code)]
-struct CfModLinks { #[serde(default)] websiteUrl: String }
+struct CfModLinks {
+    #[serde(default)]
+    websiteUrl: String,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
-struct CfMod { id: i64, #[serde(default)] name: String, #[serde(default)] links: Option<CfModLinks> }
+struct CfMod {
+    id: i64,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    links: Option<CfModLinks>,
+}
 
 #[derive(Debug, Clone, Deserialize)]
-struct CfModsResp { data: Vec<CfMod> }
+struct CfModsResp {
+    data: Vec<CfMod>,
+}
 
 pub(crate) fn cf_api_key() -> String {
-    if let Ok(k) = std::env::var("CF_API_KEY") { return k; }
+    if let Ok(k) = std::env::var("CF_API_KEY") {
+        return k;
+    }
     let b64 = "JDJhJDEwJHNBWVhqblU1N0EzSmpzcmJYM3JVdk92UWk2NHBLS3BnQ2VpbGc1TUM1UGNKL0RYTmlGWWxh";
     use base64::Engine as _;
-    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).unwrap_or_default();
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .unwrap_or_default();
     String::from_utf8(bytes).unwrap_or_default()
 }
 
-pub(crate) async fn cf_get_download_url(client: &Client, project_id: i64, file_id: i64) -> Result<std::result::Result<String, String>> {
+pub(crate) async fn cf_get_download_url(
+    client: &Client,
+    project_id: i64,
+    file_id: i64,
+) -> Result<std::result::Result<String, String>> {
     let key = cf_api_key();
     let files_req = serde_json::json!({ "fileIds": [file_id] });
     let resp = client
@@ -172,10 +205,14 @@ pub(crate) async fn cf_get_download_url(client: &Client, project_id: i64, file_i
         .await?;
     let status = resp.status();
     let body = resp.text().await?;
-    if !status.is_success() { anyhow::bail!("curseforge files api error {}: {}", status, body); }
+    if !status.is_success() {
+        anyhow::bail!("curseforge files api error {}: {}", status, body);
+    }
     let data: CfFilesResp = serde_json::from_str(&body)?;
-    if let Some(cf_file) = data.data.first() {
-        if let Some(url) = cf_file.downloadUrl.clone() { return Ok(Ok(url)); }
+    if let Some(cf_file) = data.data.first()
+        && let Some(url) = cf_file.downloadUrl.clone()
+    {
+        return Ok(Ok(url));
     }
     // fallback: manual link via /v1/mods
     let mods_req = serde_json::json!({ "modIds": [project_id] });
@@ -189,18 +226,26 @@ pub(crate) async fn cf_get_download_url(client: &Client, project_id: i64, file_i
         .await?;
     let status2 = resp2.status();
     let body2 = resp2.text().await?;
-    if !status2.is_success() { anyhow::bail!("curseforge mods api error {}: {}", status2, body2); }
+    if !status2.is_success() {
+        anyhow::bail!("curseforge mods api error {}: {}", status2, body2);
+    }
     let mods: CfModsResp = serde_json::from_str(&body2)?;
     if let Some(m) = mods.data.first() {
-        let base = m.links.as_ref().map(|l| l.websiteUrl.clone()).unwrap_or_default();
+        let base = m
+            .links
+            .as_ref()
+            .map(|l| l.websiteUrl.clone())
+            .unwrap_or_default();
         let url = if base.is_empty() {
-            format!("https://www.curseforge.com/projects/{}/files/{}", project_id, file_id)
+            format!("https://www.curseforge.com/projects/{project_id}/files/{file_id}")
         } else {
-            format!("{}/files/{}", base.trim_end_matches('/'), file_id)
+            format!("{}/files/{file_id}", base.trim_end_matches('/'))
         };
         return Ok(Err(url));
     }
-    Ok(Err(format!("https://www.curseforge.com/projects/{}/files/{}", project_id, file_id)))
+    Ok(Err(format!(
+        "https://www.curseforge.com/projects/{project_id}/files/{file_id}"
+    )))
 }
 
 // (types are used within task modules; not needed directly here)
@@ -219,5 +264,5 @@ pub async fn run(cfg: crate::cli::Cli) -> Result<()> {
         pack_folder: pack_folder_for_update,
         meta_file: cfg.meta_file.clone(),
     };
-    return crate::task::update::run_update(opts_for_update).await;
+    crate::task::update::run_update(opts_for_update).await
 }

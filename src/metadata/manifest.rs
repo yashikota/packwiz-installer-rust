@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HashKV {
-    #[serde(rename = "type")] pub type_: String,
+    #[serde(rename = "type")]
+    pub type_: String,
     pub value: String,
 }
 
@@ -12,5 +13,5 @@ pub struct ManifestFile {
     pub packFileHash: Option<HashKV>,
     pub indexFileHash: Option<HashKV>,
     pub cachedFiles: serde_json::Map<String, serde_json::Value>,
-    pub cachedSide: crate::target::side::Side,
+    pub cachedSide: crate::destination::side::Side,
 }
