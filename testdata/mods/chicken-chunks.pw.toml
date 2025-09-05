@@ -1,0 +1,13 @@
+name = "Chicken Chunks"
+filename = "ChickenChunks-1.21.1-2.12.0.103.jar"
+side = "both"
+
+[download]
+url = "https://cdn.modrinth.com/data/2JkvF271/versions/qjLycJpg/ChickenChunks-1.21.1-2.12.0.103.jar"
+hash-format = "sha512"
+hash = "addbd153084a12607f8d29ee21db1622c8c60b786d7ac68f0293188f01822c013820e9db18224d3cc8c1a1765292091ce6072403233d8af9d49ccde62b663ea0"
+
+[update]
+[update.modrinth]
+mod-id = "2JkvF271"
+version = "qjLycJpg"

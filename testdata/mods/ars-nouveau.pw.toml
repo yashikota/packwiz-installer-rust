@@ -1,0 +1,13 @@
+name = "Ars Nouveau"
+filename = "ars_nouveau-1.21.1-5.10.4.jar"
+side = "both"
+
+[download]
+url = "https://cdn.modrinth.com/data/TKB6INcv/versions/kbGRLdlE/ars_nouveau-1.21.1-5.10.4.jar"
+hash-format = "sha512"
+hash = "12c1fbf01b6a117b7a7bb7f11c4e0c75beca6cf303a638dbb8e81900b642b9f2f01b4dbb58d2aef87844bbb919b682a224ac97686cd58e30c8f1ad23d5ec62ba"
+
+[update]
+[update.modrinth]
+mod-id = "TKB6INcv"
+version = "kbGRLdlE"

@@ -1,0 +1,13 @@
+name = "Ender IO"
+filename = "enderio-7.1.8-alpha.jar"
+side = "both"
+
+[download]
+url = "https://cdn.modrinth.com/data/49ZofO4f/versions/ETpuDdei/enderio-7.1.8-alpha.jar"
+hash-format = "sha512"
+hash = "30af0ba3a329b2c5541b2b23137bb6369b01038795e3b95b9e23b849b9333a0a5f080df8e363e1e9231d9a36dcf017d9cecd6529ec919e861b833e7052fb80e9"
+
+[update]
+[update.modrinth]
+mod-id = "49ZofO4f"
+version = "ETpuDdei"
