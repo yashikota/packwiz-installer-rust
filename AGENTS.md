@@ -31,6 +31,20 @@
 - Focus areas: hashing (`hash::*`), URI join, index processing, optional-mod selection, and manifest writing.
 - Run all: `cargo test` (ensure tests do not require network; mock or fixture files).
 
+### Testing
+
+Rust VS Original
+
+```bash
+cargo run --release -- https://yashikota.github.io/packwiz-installer-rust/testdata/pack.toml --pack-folder dist
+```
+
+```bash
+java -jar .\testdata\packwiz-installer-bootstrap.jar https://yashikota.github.io/packwiz-installer-rust/testdata/pack.toml --pack-folder original
+```
+
+Diff Json.
+
 ## Commit & Pull Requests
 - Commits: imperative, concise subject; scope optional (e.g., `task: validate hashes before write`).
 - PRs: include motivation, summary of changes, usage example (e.g., `cargo run ...`), and screenshots/log snippets when relevant.
@@ -40,4 +54,3 @@
 - Secrets: do not commit API keys. `CF_API_KEY` is read from env for CurseForge resolution.
 - Logging: controlled via `RUST_LOG` (e.g., `RUST_LOG=packwiz_installer_rust=debug`).
 - Network: keep downloads deterministic; verify hashes before writing; avoid widening timeouts without justification.
-
