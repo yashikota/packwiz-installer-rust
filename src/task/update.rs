@@ -93,6 +93,7 @@ pub async fn run_update(opts: Options) -> Result<()> {
     let mut cached_files = serde_json::Map::new();
 
     // First, preserve order from existing manifest if it exists
+    #[allow(clippy::collapsible_if)]
     if manifest_path.exists() {
         if let Ok(text) = std::fs::read_to_string(&manifest_path) {
             if let Ok(existing_manifest) = serde_json::from_str::<serde_json::Value>(&text) {
