@@ -96,7 +96,10 @@ pub async fn run_update(opts: Options) -> Result<()> {
     if manifest_path.exists() {
         if let Ok(text) = std::fs::read_to_string(&manifest_path) {
             if let Ok(existing_manifest) = serde_json::from_str::<serde_json::Value>(&text) {
-                if let Some(existing_files) = existing_manifest.get("cachedFiles").and_then(|v| v.as_object()) {
+                if let Some(existing_files) = existing_manifest
+                    .get("cachedFiles")
+                    .and_then(|v| v.as_object())
+                {
                     for existing_key in existing_files.keys() {
                         if let Some(v) = by_path.remove(existing_key) {
                             cached_files.insert(existing_key.clone(), v);
