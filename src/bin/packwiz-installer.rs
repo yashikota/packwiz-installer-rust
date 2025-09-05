@@ -7,7 +7,6 @@ async fn main() -> anyhow::Result<()> {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     fmt().with_env_filter(env_filter).init();
 
-    let cli = packwiz_installer_rust::cli::Cli::parse();
-    packwiz_installer_rust::run(cli).await
+    let cli = packwiz_installer::cli::Cli::parse();
+    packwiz_installer::run(cli).await
 }
-

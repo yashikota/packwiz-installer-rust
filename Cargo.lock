@@ -1076,7 +1076,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "packwiz-installer-rust"
+name = "packwiz-installer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
