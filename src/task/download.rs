@@ -56,6 +56,18 @@ pub async fn process_entry(entry: IndexEntry, ctx: &EntryContext) -> Result<Opti
                 .clone()
                 .unwrap_or_else(|| mod_toml.filename.clone());
             let _ = std::fs::remove_file(ctx.pack_folder.join(&temp));
+
+            // If excluded only due to side restriction (not optional), create onlyOtherSide entry
+            if !include_side && include_opt {
+                let mut file_obj = serde_json::Map::new();
+                file_obj.insert("optionValue".into(), serde_json::Value::Bool(true));
+                file_obj.insert("onlyOtherSide".into(), serde_json::Value::Bool(true));
+                return Ok(Some(EntryResult {
+                    path: entry.file.clone(),
+                    value: serde_json::Value::Object(file_obj),
+                }));
+            }
+
             return Ok(None);
         }
         let mut dest_rel_val = entry

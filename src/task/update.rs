@@ -88,13 +88,30 @@ pub async fn run_update(opts: Options) -> Result<()> {
             by_path.insert(er.path, er.value);
         }
     }
-    // Build cached_files sorted by key in descending order to match original
+    // Build cached_files preserving existing order from previous manifest,
+    // then append new files in index.toml order (mimics Kotlin's completion service behavior)
     let mut cached_files = serde_json::Map::new();
-    let mut keys: Vec<String> = by_path.keys().cloned().collect();
-    keys.sort_by(|a, b| b.cmp(a));
-    for k in keys {
-        if let Some(v) = by_path.remove(&k) {
-            cached_files.insert(k, v);
+
+    // First, preserve order from existing manifest if it exists
+    if manifest_path.exists() {
+        if let Ok(text) = std::fs::read_to_string(&manifest_path) {
+            if let Ok(existing_manifest) = serde_json::from_str::<serde_json::Value>(&text) {
+                if let Some(existing_files) = existing_manifest.get("cachedFiles").and_then(|v| v.as_object()) {
+                    for existing_key in existing_files.keys() {
+                        if let Some(v) = by_path.remove(existing_key) {
+                            cached_files.insert(existing_key.clone(), v);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Then add any new files in index.toml order
+    for index_entry in &index_toml.files {
+        let entry_path = index_entry.file.clone();
+        if let Some(v) = by_path.remove(&entry_path) {
+            cached_files.insert(entry_path, v);
         }
     }
 
